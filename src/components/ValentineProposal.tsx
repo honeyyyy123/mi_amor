@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Heart, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Celebration from "./Celebration";
 
 const ValentineProposal = () => {
-  const [noButtonPosition, setNoButtonPosition] = useState({ x: 0, y: 0 });
+  const [noButtonPosition, setNoButtonPosition] = useState({ x: 150, y: 40 });
   const [hasAccepted, setHasAccepted] = useState(false);
   const [noAttempts, setNoAttempts] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,23 +19,78 @@ const ValentineProposal = () => {
     "Come on! 😘",
     "Really?! 😢",
     "You know you want to! 💗",
+    "Nice try! 😜",
+    "Haha, can't catch me! 🏃",
+    "Just click YES! 💝",
+    "I'm too fast! ⚡",
   ];
 
-  const moveNoButton = () => {
+  const moveNoButton = useCallback(() => {
     if (!containerRef.current || !noButtonRef.current) return;
 
     const container = containerRef.current.getBoundingClientRect();
     const button = noButtonRef.current.getBoundingClientRect();
 
-    const maxX = container.width - button.width - 20;
-    const maxY = container.height - button.height - 20;
+    const maxX = container.width - button.width - 10;
+    const maxY = container.height - button.height - 10;
 
-    const newX = Math.random() * maxX;
-    const newY = Math.random() * maxY;
+    // Generate new random position
+    let newX = Math.random() * maxX;
+    let newY = Math.random() * maxY;
 
-    setNoButtonPosition({ x: newX, y: newY });
+    // Make sure it moves significantly from current position
+    const currentX = noButtonPosition.x;
+    const currentY = noButtonPosition.y;
+    
+    // If new position is too close to current, push it further
+    const minDistance = 80;
+    const dx = newX - currentX;
+    const dy = newY - currentY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance < minDistance) {
+      newX = (currentX + maxX / 2) % maxX;
+      newY = (currentY + maxY / 2) % maxY;
+    }
+
+    setNoButtonPosition({ x: Math.max(0, Math.min(newX, maxX)), y: Math.max(0, Math.min(newY, maxY)) });
     setNoAttempts((prev) => prev + 1);
-  };
+  }, [noButtonPosition]);
+
+  // Check if cursor/touch is near the NO button
+  const handleContainerMove = useCallback((clientX: number, clientY: number) => {
+    if (!containerRef.current || !noButtonRef.current) return;
+
+    const button = noButtonRef.current.getBoundingClientRect();
+    const buttonCenterX = button.left + button.width / 2;
+    const buttonCenterY = button.top + button.height / 2;
+
+    // Calculate distance from cursor to button center
+    const dx = clientX - buttonCenterX;
+    const dy = clientY - buttonCenterY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // If cursor is within 60px of button, move it away
+    if (distance < 60) {
+      moveNoButton();
+    }
+  }, [moveNoButton]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    handleContainerMove(e.clientX, e.clientY);
+  }, [handleContainerMove]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length > 0) {
+      handleContainerMove(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, [handleContainerMove]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length > 0) {
+      handleContainerMove(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, [handleContainerMove]);
 
   const handleYesClick = () => {
     setHasAccepted(true);
@@ -46,7 +101,12 @@ const ValentineProposal = () => {
   }
 
   return (
-    <div className="min-h-screen bg-blush flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div 
+      className="min-h-screen bg-blush flex flex-col items-center justify-center p-4 relative overflow-hidden"
+      onMouseMove={handleMouseMove}
+      onTouchMove={handleTouchMove}
+      onTouchStart={handleTouchStart}
+    >
       {/* Background decorative hearts */}
       <div className="absolute top-10 left-10 animate-pulse-love">
         <Heart className="w-16 h-16 text-primary/20 fill-primary/10" />
@@ -90,7 +150,7 @@ const ValentineProposal = () => {
 
         {/* Funny message when trying to click NO */}
         {noAttempts > 0 && (
-          <p className="text-accent font-semibold text-xl mb-4 animate-bounce-in">
+          <p className="text-accent font-semibold text-xl mb-4 animate-bounce-in" key={noAttempts}>
             {funnyMessages[noAttempts % funnyMessages.length]}
           </p>
         )}
@@ -98,12 +158,12 @@ const ValentineProposal = () => {
         {/* Buttons container */}
         <div
           ref={containerRef}
-          className="relative h-32 w-full max-w-md mx-auto"
+          className="relative h-40 w-full max-w-md mx-auto select-none"
         >
           {/* YES Button - stays in place */}
           <Button
             onClick={handleYesClick}
-            className="absolute left-1/4 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-romantic text-primary-foreground hover:scale-110 transition-all duration-300 text-xl px-8 py-6 rounded-full shadow-lg hover:shadow-xl font-bold"
+            className="absolute left-1/4 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-romantic text-primary-foreground hover:scale-110 transition-all duration-300 text-xl px-8 py-6 rounded-full shadow-lg hover:shadow-xl font-bold z-10"
           >
             YES! 💖
           </Button>
@@ -112,17 +172,12 @@ const ValentineProposal = () => {
           <Button
             ref={noButtonRef}
             variant="outline"
-            onMouseEnter={moveNoButton}
-            onTouchStart={moveNoButton}
-            className="absolute transition-all duration-200 ease-out border-2 border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50 text-lg px-6 py-5 rounded-full"
+            className="absolute transition-all duration-150 ease-out border-2 border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50 text-lg px-6 py-5 rounded-full pointer-events-none select-none"
             style={{
-              transform: `translate(${noButtonPosition.x}px, ${noButtonPosition.y}px)`,
-              left: noButtonPosition.x === 0 && noButtonPosition.y === 0 ? "65%" : "0",
-              top: noButtonPosition.x === 0 && noButtonPosition.y === 0 ? "50%" : "0",
-              ...(noButtonPosition.x === 0 && noButtonPosition.y === 0
-                ? { transform: "translate(-50%, -50%)" }
-                : {}),
+              left: `${noButtonPosition.x}px`,
+              top: `${noButtonPosition.y}px`,
             }}
+            tabIndex={-1}
           >
             No 😅
           </Button>
@@ -130,7 +185,7 @@ const ValentineProposal = () => {
 
         {/* Hint text */}
         <p className="text-muted-foreground text-sm mt-8 font-body">
-          Psst... that "No" button seems a bit shy! 😉
+          Psst... that "No" button is running away from you! 😉
         </p>
       </div>
     </div>
